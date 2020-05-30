@@ -25,6 +25,9 @@ and/or if you just want to buy one I make and sell various versions of this over
 
 https://www.etsy.com/shop/VIDEOWAAAVES
 
+
+please note that if you are using the no Dac version you will not be able to use HDMI output at this moment
+
 sorry no manual rn!  just try messing around with the kontrols tho and you'll see some cool stuffs.  the bottom 5 buttons on the bottom left hand side switch from different scales
 default is 5et, then from left to right we have 7ET, 12ET, carlos alpha, carlos beta, and no scale at all
 
