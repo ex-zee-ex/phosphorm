@@ -23,5 +23,8 @@ https://drive.google.com/file/d/1H1eXkZE51WCMaG-b7kxvnrunPrhR6X7e/view?usp=shari
 
 sorry no manual rn!  just try messing around with the kontrols tho and you'll see some cool stuffs.  the bottom 5 buttons on the bottom left hand side switch from different scales
 default is 5et, then from left to right we have 7ET, 12ET, carlos alpha, carlos beta, and no scale at all
-https://www.youtube.com/watch?v=eVEV8KhYzuQ&t=518s heres a real loosey goosey intro to what exactly is going on with the controls!
+
+https://www.youtube.com/watch?v=eVEV8KhYzuQ&t=518s 
+
+heres a real loosey goosey intro to what exactly is going on with the controls!
 
