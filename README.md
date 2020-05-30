@@ -32,6 +32,10 @@ https://www.youtube.com/watch?v=eVEV8KhYzuQ&t=518s
 
 heres a real loosey goosey intro to what exactly is going on with the controls!
 
-if you enjoy this program and any of the other open source softwares i make stop by my website and toss me a donation via the paypal button!  the more donations i recieve the more time i have to devote to making cool shit like this available in the world!
+if you enjoy this program and any of the other open source softwares i make stop by my website
+
+https://andreijaycreativecoding.com
+
+and toss me a donation via the paypal button!  the more donations i recieve the more time i have to devote to making cool shit like this available in the world!
 andreijay
 
