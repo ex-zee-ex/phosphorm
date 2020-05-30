@@ -2,6 +2,10 @@
 an audio visual synthesizers optimized for x-y oscilloscope displays
 for the waaave pool distro
 
+![Image description](https://github.com/ex-zee-ex/pictures/blob/master/phosphorm.jpg)
+
+
+
 check out waaave pool github
 https://github.com/ex-zee-ex/waaaave_pool
 on what you need to get set up
