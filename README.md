@@ -15,7 +15,7 @@ if you download the files above and run on a waaave pool distro with an external
 
 and as always the simpler way to do things is just download, uncompress and use balena etcher to write one of these images to an sd card!
 
-external DAC
+external DAC (configured for plug n play with hifiberry DAC plus pro)
 https://drive.google.com/file/d/1TQMdb_1eCxykmzVaxtkZqd8hsKQuHHOH/view?usp=sharing
 
 no external DAC
