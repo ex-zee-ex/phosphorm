@@ -12,7 +12,10 @@
 
 #include "ofMain.h"
 #include "ofxMidi.h"
-// #include "ofxOMXVideoGrabber.h"
+
+#ifdef TARGET_RASPBERRY_PI 
+    #include "ofxOMXVideoGrabber.h"
+#endif
 
 class ofApp : public ofBaseApp, public ofxMidiListener {
 	
