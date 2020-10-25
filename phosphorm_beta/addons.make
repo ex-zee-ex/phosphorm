@@ -1,2 +1,2 @@
 ofxMidi
-ofxOMXCamera
+#ofxOMXCamera
