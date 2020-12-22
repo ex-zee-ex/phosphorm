@@ -1,10 +1,22 @@
-
+/*
+ * Copyright (c) 2013 Dan Wilcox <danomatika@gmail.com>
+ *
+ * BSD Simplified License.
+ * For information on usage and redistribution, and for a DISCLAIMER OF ALL
+ * WARRANTIES, see the file, "LICENSE.txt," in this distribution.
+ *
+ * See https://github.com/danomatika/ofxMidi for documentation
+ *
+ */
 
 
 #include "ofApp.h"
 
 
 #include <iostream>
+
+
+float osc_lag=.05;
 
 float ff=1.01;
 float xw=1.01;
@@ -208,6 +220,41 @@ bool frequency_quantize=1;
 
 
 
+//p_lock biz
+//maximum total size of the plock array
+const int p_lock_size=240;
+
+
+//p_lock_switch turns on and off p_locks
+bool p_lock_switch=0;
+
+bool p_lock_erase=0;
+
+//maximum number of p_locks available...maybe there can be one for every knob
+//for whatever wacky reason the last member of this array of arrays has a glitch
+//so i guess just make an extra array and forget about it for now
+const int p_lock_number=48;
+
+//so how we will organize the p_locks is in multidimensional arrays
+//to access the data at timestep x for p_lock 2 (remember counting from 0) we use p_lock[2][x]
+float p_lock[p_lock_number][p_lock_size];
+
+
+//smoothing parameters(i think for all of these we can array both the arrays and the floats
+//for now let us just try 1 smoothing parameter for everything.
+float p_lock_smooth=.5;
+
+
+//and then lets try an array of floats for storing the smoothed values
+float p_lock_smoothed[p_lock_number];
+
+
+//turn on and off writing to the array
+bool p_lock_0_switch=1;
+
+//global counter for all the locks
+int p_lock_increment=0;
+
 
 
 //--------------------------------------------------------------
@@ -248,7 +295,9 @@ void ofApp::setup() {
     
     
     int bufferSize		= 512;
-    sampleRate 			= 48000;
+    //sampleRate 			= 48000;
+    
+    sampleRate 			= 192000;
     
      //audio
     phase_l1= 0;
@@ -344,8 +393,23 @@ void ofApp::setup() {
     ofClear(0,0,0,255);
     fb1.end();
     
+    //p_lock biz
+	for(int i=0;i<p_lock_number;i++){
+        
+        for(int j=0;j<p_lock_size;j++){
+            
+            p_lock[i][j]=0;
+            
+        }//endplocksize
     
+    }//endplocknumber
     
+    //initializing
+     for(int i=0;i<p_lock_size;i++){
+		p_lock[0][i]=.5;
+		p_lock[1][i]=.5;
+
+	}
 
 }
 
@@ -353,6 +417,14 @@ void ofApp::setup() {
 void ofApp::update() {
     midibiz();
     
+    
+    for(int i=0;i<p_lock_number;i++){
+        p_lock_smoothed[i]=p_lock[i][p_lock_increment]*(1.0f-p_lock_smooth)+p_lock_smoothed[i]*p_lock_smooth;
+        
+        if(abs(p_lock_smoothed[i])<.05){p_lock_smoothed[i]=0;}
+        
+        
+    }
 }
 
 //--------------------------------------------------------------
@@ -397,17 +469,12 @@ void ofApp::draw() {
     ofSetLineWidth(1);
     ofNoFill();
     
-    for (unsigned int i = 0; i < rAudio.size(); i+=2){
-        
-        
-        
-        
+    for (unsigned int i = 0; i < rAudio.size()/4; i++){
+      
         float x =  scaleshape*(lAudio[i]*180.0f)+ofGetWidth()/2.0;
         float y = scaleshape*(rAudio[i]*180.0f)+ofGetHeight()/2.0;
-        
-        
-        
-        
+ 
+		
         ofCurveVertex(x,y);
         
     }//endifor
@@ -422,8 +489,6 @@ void ofApp::draw() {
    
     fb1.begin();
     fb0.draw(0,0);
-    
-
     fb1.end();
     
     
@@ -440,7 +505,11 @@ void ofApp::draw() {
 
 
 
-/********endaudiodrawbiz****/
+	//p_lock biz
+	 if(p_lock_switch==1){
+        p_lock_increment++;
+        p_lock_increment=p_lock_increment%p_lock_size;
+    }
    
 }
 
@@ -448,14 +517,7 @@ void ofApp::draw() {
 //--------------------------------------------------------------
 void ofApp::audioOut(ofSoundBuffer & buffer){
     
-    //scaling amplitude as a fucntion of frequency
-    // cout <<" c1="<<c1<< endl;
-    
-    
-    //heres some settings for standard combinations of tunings
-    //just a regular kind of scalling
-    //middle_frequency=440
-    //f_scale=63
+   
     
     
     
@@ -544,6 +606,7 @@ void ofApp::audioOut(ofSoundBuffer & buffer){
         am_scalar=1.0;
         pm_scalar=1.0;
     }
+    
     //f-scaling is the map from 0-1 into whatever range you want
     //usual midi keyboard piano notes go from 0-127, if you want
     //to rescale things like that set middle frequency to 440 and
@@ -564,25 +627,53 @@ void ofApp::audioOut(ofSoundBuffer & buffer){
     //here you can also add quantisation from midi->freq values
     //add (int) to the arguments to only allow for integer values
     
+    //dummy variables
+    float d_osc_l1_freq=f_scale*p_lock_smoothed[8];
+    float d_osc_r1_freq=f_scale*p_lock_smoothed[9];
+    float d_osc_l2_freq=f_scale*p_lock_smoothed[24];
+    float d_osc_r2_freq=f_scale*p_lock_smoothed[25];
     
+    float d_ampmod_osc_l1_freq=f_scale_am*p_lock_smoothed[10];
+    float d_ampmod_osc_r1_freq=f_scale_am*p_lock_smoothed[11];
+    float d_ampmod_osc_l2_freq=f_scale_am*p_lock_smoothed[26];
+    float d_ampmod_osc_r2_freq=f_scale_am*p_lock_smoothed[27];
+    
+    //phasemods
+    float d_phasemod_osc_l1_freq=f_scale_pm*p_lock_smoothed[12];
+    float d_phasemod_osc_r1_freq=f_scale_pm*p_lock_smoothed[13];
+    float d_phasemod_osc_l2_freq=f_scale_pm*p_lock_smoothed[28];
+    float d_phasemod_osc_r2_freq=f_scale_pm*p_lock_smoothed[29];
+    
+    
+    /*
+    
+    //replace all of these 
     //audio
-    osc_l1_freq=f_scale*osc_l1_midi;
-    osc_r1_freq=f_scale*osc_r1_midi;
-    osc_l2_freq=f_scale*osc_l2_midi;
-    osc_r2_freq=f_scale*osc_r2_midi;
+    osc_l1_freq=f_scale*p_lock_smoothed[8];
+    osc_r1_freq=f_scale*p_lock_smoothed[9];
+    osc_l2_freq=f_scale*p_lock_smoothed[24];
+    osc_r2_freq=f_scale*p_lock_smoothed[25];
     
     
     //ampmods
-    ampmod_osc_l1_freq=f_scale_am*ampmod_osc_l1_midi;
-    ampmod_osc_r1_freq=f_scale_am*ampmod_osc_r1_midi;
-    ampmod_osc_l2_freq=f_scale_am*ampmod_osc_l2_midi;
-    ampmod_osc_r2_freq=f_scale_am*ampmod_osc_r2_midi;
+    //ampmod_osc_l1_freq=f_scale_am*ampmod_osc_l1_midi;
+    //ampmod_osc_r1_freq=f_scale_am*ampmod_osc_r1_midi;
+    //ampmod_osc_l2_freq=f_scale_am*ampmod_osc_l2_midi;
+    //ampmod_osc_r2_freq=f_scale_am*ampmod_osc_r2_midi;
+    
+    ampmod_osc_l1_freq=f_scale_am*p_lock_smoothed[10];
+    ampmod_osc_r1_freq=f_scale_am*p_lock_smoothed[11];
+    ampmod_osc_l2_freq=f_scale_am*p_lock_smoothed[26];
+    ampmod_osc_r2_freq=f_scale_am*p_lock_smoothed[27];
     
     //phasemods
-    phasemod_osc_l1_freq=f_scale_pm*phasemod_osc_l1_midi;
-    phasemod_osc_r1_freq=f_scale_pm*phasemod_osc_r1_midi;
-    phasemod_osc_l2_freq=f_scale_pm*phasemod_osc_l2_midi;
-    phasemod_osc_r2_freq=f_scale_pm*phasemod_osc_r2_midi;
+    phasemod_osc_l1_freq=f_scale_pm*p_lock_smoothed[12];
+    phasemod_osc_r1_freq=f_scale_pm*p_lock_smoothed[13];
+    phasemod_osc_l2_freq=f_scale_pm*p_lock_smoothed[28];
+    phasemod_osc_r2_freq=f_scale_pm*p_lock_smoothed[29];
+    
+    */
+    
     
     if(frequency_quantize==1){
         
@@ -591,49 +682,47 @@ void ofApp::audioOut(ofSoundBuffer & buffer){
         //or maybe just rework the math on this doggg
         float quantize_scale=1.0;
         
-        osc_l1_freq=int(quantize_scale*osc_l1_freq);
-        osc_r1_freq=int(quantize_scale*osc_r1_freq);
-        osc_l2_freq=int(quantize_scale*osc_l2_freq);
-        osc_r2_freq=int(quantize_scale*osc_r2_freq);
+        d_osc_l1_freq=int(quantize_scale*d_osc_l1_freq);
+        d_osc_r1_freq=int(quantize_scale*d_osc_r1_freq);
+        d_osc_l2_freq=int(quantize_scale*d_osc_l2_freq);
+        d_osc_r2_freq=int(quantize_scale*d_osc_r2_freq);
         
-        ampmod_osc_l1_freq=int(quantize_scale*ampmod_osc_l1_freq);
-        ampmod_osc_r1_freq=int(quantize_scale*ampmod_osc_r1_freq);
-        ampmod_osc_l2_freq=int(quantize_scale*ampmod_osc_l2_freq);
-        ampmod_osc_r2_freq=int(quantize_scale*ampmod_osc_r2_freq);
+        d_ampmod_osc_l1_freq=int(quantize_scale*d_ampmod_osc_l1_freq);
+        d_ampmod_osc_r1_freq=int(quantize_scale*d_ampmod_osc_r1_freq);
+        d_ampmod_osc_l2_freq=int(quantize_scale*d_ampmod_osc_l2_freq);
+        d_ampmod_osc_r2_freq=int(quantize_scale*d_ampmod_osc_r2_freq);
         
-        phasemod_osc_l1_freq=int(quantize_scale*phasemod_osc_l1_freq);
-        phasemod_osc_r1_freq=int(quantize_scale*phasemod_osc_r1_freq);
-        phasemod_osc_l2_freq=int(quantize_scale*phasemod_osc_l2_freq);
-        phasemod_osc_r2_freq=int(quantize_scale*phasemod_osc_r2_freq);
+        d_phasemod_osc_l1_freq=int(quantize_scale*d_phasemod_osc_l1_freq);
+        d_phasemod_osc_r1_freq=int(quantize_scale*d_phasemod_osc_r1_freq);
+        d_phasemod_osc_l2_freq=int(quantize_scale*d_phasemod_osc_l2_freq);
+        d_phasemod_osc_r2_freq=int(quantize_scale*d_phasemod_osc_r2_freq);
     }
     
     
     
     
     
-    frequency_l1=pow(octave_ratio,osc_l1_freq/equal_semitones)*middle_frequency;
-    frequency_l2=pow(octave_ratio,osc_l2_freq/equal_semitones)*middle_frequency;
+    frequency_l1=pow(octave_ratio,d_osc_l1_freq/equal_semitones)*middle_frequency;
+    frequency_l2=pow(octave_ratio,d_osc_l2_freq/equal_semitones)*middle_frequency;
     
-    frequency_r1=pow(octave_ratio,osc_r1_freq/equal_semitones)*middle_frequency;
-    //frequency_r1=pow(3.0f,osc_r1_freq/equal_semitones)*middle_frequency;
-    
-    frequency_r2=pow(octave_ratio,osc_r2_freq/equal_semitones)*middle_frequency;
+    frequency_r1=pow(octave_ratio,d_osc_r1_freq/equal_semitones)*middle_frequency;
+    frequency_r2=pow(octave_ratio,d_osc_r2_freq/equal_semitones)*middle_frequency;
     
     //ampmod
-    ampmod_frequency_l1=pow(octave_ratio,ampmod_osc_l1_freq/equal_semitones)*middle_frequency_am;
-    ampmod_frequency_l2=pow(octave_ratio,ampmod_osc_l2_freq/equal_semitones)*middle_frequency_am;
+    ampmod_frequency_l1=pow(octave_ratio,d_ampmod_osc_l1_freq/equal_semitones)*middle_frequency_am;
+    ampmod_frequency_l2=pow(octave_ratio,d_ampmod_osc_l2_freq/equal_semitones)*middle_frequency_am;
 
     
-    ampmod_frequency_r1=pow(octave_ratio,ampmod_osc_r1_freq/equal_semitones)*middle_frequency_am;
-    ampmod_frequency_r2=pow(octave_ratio,ampmod_osc_r2_freq/equal_semitones)*middle_frequency_am;
+    ampmod_frequency_r1=pow(octave_ratio,d_ampmod_osc_r1_freq/equal_semitones)*middle_frequency_am;
+    ampmod_frequency_r2=pow(octave_ratio,d_ampmod_osc_r2_freq/equal_semitones)*middle_frequency_am;
     
     //phasemod
-    phasemod_frequency_l1=pow(octave_ratio,phasemod_osc_l1_freq/equal_semitones)*middle_frequency_pm;
-    phasemod_frequency_l2=pow(octave_ratio,phasemod_osc_l2_freq/equal_semitones)*middle_frequency_pm;
+    phasemod_frequency_l1=pow(octave_ratio,d_phasemod_osc_l1_freq/equal_semitones)*middle_frequency_pm;
+    phasemod_frequency_l2=pow(octave_ratio,d_phasemod_osc_l2_freq/equal_semitones)*middle_frequency_pm;
     
     
-    phasemod_frequency_r1=pow(octave_ratio,phasemod_osc_r1_freq/equal_semitones)*middle_frequency_pm;
-    phasemod_frequency_r2=pow(octave_ratio,phasemod_osc_r2_freq/equal_semitones)*middle_frequency_pm;
+    phasemod_frequency_r1=pow(octave_ratio,d_phasemod_osc_r1_freq/equal_semitones)*middle_frequency_pm;
+    phasemod_frequency_r2=pow(octave_ratio,d_phasemod_osc_r2_freq/equal_semitones)*middle_frequency_pm;
         
     //this is to keep phase from just incrementing absurdly
     //for some reaason if the mod is just twopi then it restarts phase in rythmic glitchy bits
@@ -641,61 +730,66 @@ void ofApp::audioOut(ofSoundBuffer & buffer){
     
     
     //not positive why the 50000 yet, lower values make the base note lower, higher-higher
+    //so incredibly sloppy hahaha if yr reading this and you know whats going on here lmk
+    //ex.zee.ex at gmail.com
     float p_a_t=50000.0;
+    
+    
+    
     //audio
     phase_l1=fmod(phase_l1,8*TWO_PI);
     phaseAdderTarget_l1=(frequency_l1/p_a_t ) * TWO_PI;
-    phaseAdder_l1 = 0.05f * phaseAdder_l1 + 0.95f *phaseAdderTarget_l1;
+    phaseAdder_l1 = osc_lag * phaseAdder_l1 + (1.0f-osc_lag) *phaseAdderTarget_l1;
     
     phase_r1=fmod(phase_r1,8*TWO_PI);
     phaseAdderTarget_r1=(frequency_r1/p_a_t ) * TWO_PI;
-    phaseAdder_r1 = 0.05f * phaseAdder_r1 + 0.95f *phaseAdderTarget_r1;
+    phaseAdder_r1 = osc_lag * phaseAdder_r1 + (1.0f-osc_lag) *phaseAdderTarget_r1;
     
     phase_l2=fmod(phase_l2,8*TWO_PI);
     phaseAdderTarget_l2=(frequency_l2/50000.0 ) * TWO_PI;
-    phaseAdder_l2 = 0.05f * phaseAdder_l2 + 0.95f *phaseAdderTarget_l2;
+    phaseAdder_l2 = osc_lag * phaseAdder_l2 + osc_lag *phaseAdderTarget_l2;
     
     
     
     phase_r2=fmod(phase_r2,8*TWO_PI);
     phaseAdderTarget_r2=(frequency_r2/50000.0 ) * TWO_PI;
-    phaseAdder_r2 = 0.05f * phaseAdder_r2 + 0.95f *phaseAdderTarget_r2;
+    phaseAdder_r2 = osc_lag * phaseAdder_r2 + osc_lag *phaseAdderTarget_r2;
     
     //ampmods
     ampmod_phase_l1=fmod(ampmod_phase_l1,8*TWO_PI);
     ampmod_phaseAdderTarget_l1=(ampmod_frequency_l1/50000.0 ) * TWO_PI;
-    ampmod_phaseAdder_l1 = 0.05f * ampmod_phaseAdder_l1 + 0.95f *ampmod_phaseAdderTarget_l1;
+    ampmod_phaseAdder_l1 = osc_lag * ampmod_phaseAdder_l1 + osc_lag *ampmod_phaseAdderTarget_l1;
     
     ampmod_phase_l2=fmod(ampmod_phase_l2,8*TWO_PI);
     ampmod_phaseAdderTarget_l2=(ampmod_frequency_l2/50000.0 ) * TWO_PI;
-    ampmod_phaseAdder_l2 = 0.05f * ampmod_phaseAdder_l2 + 0.95f *ampmod_phaseAdderTarget_l2;
+    ampmod_phaseAdder_l2 = osc_lag * ampmod_phaseAdder_l2 + osc_lag *ampmod_phaseAdderTarget_l2;
 
     
     ampmod_phase_r1=fmod(ampmod_phase_r1,8*TWO_PI);
     ampmod_phaseAdderTarget_r1=(ampmod_frequency_r1/50000.0 ) * TWO_PI;
-    ampmod_phaseAdder_r1 = 0.05f * ampmod_phaseAdder_r1 + 0.95f *ampmod_phaseAdderTarget_r1;
+    ampmod_phaseAdder_r1 = osc_lag * ampmod_phaseAdder_r1 + osc_lag *ampmod_phaseAdderTarget_r1;
     
     ampmod_phase_r2=fmod(ampmod_phase_r2,8*TWO_PI);
     ampmod_phaseAdderTarget_r2=(ampmod_frequency_r2/50000.0 ) * TWO_PI;
-    ampmod_phaseAdder_r2 = 0.05f * ampmod_phaseAdder_r2 + 0.95f *ampmod_phaseAdderTarget_r2;
+    ampmod_phaseAdder_r2 = osc_lag * ampmod_phaseAdder_r2 + osc_lag *ampmod_phaseAdderTarget_r2;
     
     //phasemods
     phasemod_phase_l1=fmod(phasemod_phase_l1,8*TWO_PI);
     phasemod_phaseAdderTarget_l1=(phasemod_frequency_l1/50000.0 ) * TWO_PI;
-    phasemod_phaseAdder_l1 = 0.05f * phasemod_phaseAdder_l1 + 0.95f *phasemod_phaseAdderTarget_l1;
+    phasemod_phaseAdder_l1 = osc_lag * phasemod_phaseAdder_l1 + osc_lag *phasemod_phaseAdderTarget_l1;
     
     phasemod_phase_l2=fmod(phasemod_phase_l2,8*TWO_PI);
     phasemod_phaseAdderTarget_l2=(phasemod_frequency_l2/50000.0 ) * TWO_PI;
-    phasemod_phaseAdder_l2 = 0.05f * phasemod_phaseAdder_l2 + 0.95f *phasemod_phaseAdderTarget_l2;
+    phasemod_phaseAdder_l2 = osc_lag * phasemod_phaseAdder_l2 + osc_lag *phasemod_phaseAdderTarget_l2;
     
     
     phasemod_phase_r1=fmod(phasemod_phase_r1,8*TWO_PI);
     phasemod_phaseAdderTarget_r1=(phasemod_frequency_r1/50000.0 ) * TWO_PI;
-    phasemod_phaseAdder_r1 = 0.05f * phasemod_phaseAdder_r1 + 0.95f *phasemod_phaseAdderTarget_r1;
+    phasemod_phaseAdder_r1 = osc_lag * phasemod_phaseAdder_r1 + osc_lag *phasemod_phaseAdderTarget_r1;
     
     phasemod_phase_r2=fmod(phasemod_phase_r2,8*TWO_PI);
     phasemod_phaseAdderTarget_r2=(phasemod_frequency_r2/50000.0 ) * TWO_PI;
-    phasemod_phaseAdder_r2 = 0.05f * phasemod_phaseAdder_r2 + 0.95f *phasemod_phaseAdderTarget_r2;
+    phasemod_phaseAdder_r2 = osc_lag * phasemod_phaseAdder_r2 + osc_lag *phasemod_phaseAdderTarget_r2;
 
     
     
@@ -733,64 +827,109 @@ void ofApp::audioOut(ofSoundBuffer & buffer){
            
             
          
+            float d_quantize_amount_l1=24.0f*p_lock_smoothed[14]+1.0f;
+            float d_quantize_amount_ampmod_l1=24.0f*p_lock_smoothed[30]+1.0f;
+            float d_quantize_amount_phasemod_l1=24.0f*p_lock_smoothed[34]+1.0f;
             
+            float d_quantize_amount_r1=24.0f*p_lock_smoothed[15]+1.0f;
+            float d_quantize_amount_ampmod_r1=24.0f*p_lock_smoothed[31]+1.0f;
+            float d_quantize_amount_phasemod_r1=24.0f*p_lock_smoothed[35]+1.0f;
+            
+            float d_quantize_amount_l2=24.0f*p_lock_smoothed[38]+1.0f;
+            float d_quantize_amount_ampmod_l2=24.0f*p_lock_smoothed[42]+1.0f;
+            float d_quantize_amount_phasemod_l2=24.0f*p_lock_smoothed[46]+1.0f;
+            
+            float d_quantize_amount_r2=24.0f*p_lock_smoothed[39]+1.0f;
+            float d_quantize_amount_ampmod_r2=24.0f*p_lock_smoothed[43]+1.0f;
+            float d_quantize_amount_phasemod_r2=24.0f*p_lock_smoothed[47]+1.0f;
+            
+            float d_quantize_mix_l1=p_lock_smoothed[6];
+            float d_quantize_mix_ampmod_l1=p_lock_smoothed[22];
+            float d_quantize_mix_phasemod_l1=p_lock_smoothed[32];
+            
+            float d_quantize_mix_l2=p_lock_smoothed[36];
+            float d_quantize_mix_ampmod_l2=p_lock_smoothed[40];
+            float d_quantize_mix_phasemod_l2=p_lock_smoothed[44];
+            
+            float d_quantize_mix_r1=p_lock_smoothed[7];
+            float d_quantize_mix_ampmod_r1=p_lock_smoothed[23];
+            float d_quantize_mix_phasemod_r1=p_lock_smoothed[33];
+            
+            float d_quantize_mix_r2=p_lock_smoothed[37];
+            float d_quantize_mix_ampmod_r2=p_lock_smoothed[41];
+            float d_quantize_mix_phasemod_r2=p_lock_smoothed[45];
+            
+            float d_ampmod_osc_l1_amp=p_lock_smoothed[2];
+            float d_ampmod_osc_r1_amp=p_lock_smoothed[3];
+            float d_ampmod_osc_l2_amp=p_lock_smoothed[18];
+            float d_ampmod_osc_r2_amp=p_lock_smoothed[19];
+            
+            float d_phasemod_osc_l1_amp=p_lock_smoothed[4];
+            float d_phasemod_osc_r1_amp=p_lock_smoothed[5];
+            float d_phasemod_osc_l2_amp=p_lock_smoothed[20];
+            float d_phasemod_osc_r2_amp=p_lock_smoothed[21];
+            
+            float d_osc_l1_amp=p_lock_smoothed[0];
+            float d_osc_r1_amp=p_lock_smoothed[1];
+            float d_osc_l2_amp=p_lock_smoothed[16];
+            float d_osc_r2_amp=p_lock_smoothed[17];
             
             
             
             //ampmod initialize and quantize
             
             //lefts
-            float ampmod_l1=osc(ampmod_phase_l1,ampmod_osc_l1_amp,ampmod_osc_l1_shape);
+            float ampmod_l1=osc(ampmod_phase_l1,d_ampmod_osc_l1_amp,ampmod_osc_l1_shape);
 
-            ampmod_l1=quantize(ampmod_l1,quantize_amount_ampmod_l1, quantize_mix_ampmod_l1);
+            ampmod_l1=quantize(ampmod_l1,d_quantize_amount_ampmod_l1, d_quantize_mix_ampmod_l1);
             
-            float ampmod_l2=osc(ampmod_phase_l2,ampmod_osc_l2_amp,ampmod_osc_l2_shape);
+            float ampmod_l2=osc(ampmod_phase_l2,d_ampmod_osc_l2_amp,ampmod_osc_l2_shape);
             
-            ampmod_l2=quantize(ampmod_l2,quantize_amount_ampmod_l2, quantize_mix_ampmod_l2);
+            ampmod_l2=quantize(ampmod_l2,d_quantize_amount_ampmod_l2, d_quantize_mix_ampmod_l2);
             
             //rights
-            float ampmod_r1=osc(ampmod_phase_r1+PI/2.0f,ampmod_osc_r1_amp,ampmod_osc_r1_shape);
+            float ampmod_r1=osc(ampmod_phase_r1+PI/2.0f,d_ampmod_osc_r1_amp,ampmod_osc_r1_shape);
             
-            ampmod_r1=quantize(ampmod_r1,quantize_amount_ampmod_r1, quantize_mix_ampmod_r1);
+            ampmod_r1=quantize(ampmod_r1,d_quantize_amount_ampmod_r1, d_quantize_mix_ampmod_r1);
             
-            float ampmod_r2=osc(ampmod_phase_r2+PI/2.0f,ampmod_osc_r2_amp,ampmod_osc_r2_shape);
+            float ampmod_r2=osc(ampmod_phase_r2+PI/2.0f,d_ampmod_osc_r2_amp,ampmod_osc_r2_shape);
             
-            ampmod_r2=quantize(ampmod_r2,quantize_amount_ampmod_r2, quantize_mix_ampmod_r2);
+            ampmod_r2=quantize(ampmod_r2,d_quantize_amount_ampmod_r2, d_quantize_mix_ampmod_r2);
             
             
             //phasemod initialize and quantize
             
             //lefts
-            float phasemod_l1=osc(phasemod_phase_l1,phasemod_osc_l1_amp,phasemod_osc_l1_shape);
+            float phasemod_l1=osc(phasemod_phase_l1,d_phasemod_osc_l1_amp,phasemod_osc_l1_shape);
             
-            phasemod_l1=quantize(phasemod_l1,quantize_amount_phasemod_l1, quantize_mix_phasemod_l1);
+            phasemod_l1=quantize(phasemod_l1,d_quantize_amount_phasemod_l1, d_quantize_mix_phasemod_l1);
             
-            float phasemod_l2=osc(phasemod_phase_l2,phasemod_osc_l2_amp,phasemod_osc_l2_shape);
+            float phasemod_l2=osc(phasemod_phase_l2,d_phasemod_osc_l2_amp,phasemod_osc_l2_shape);
             
-            phasemod_l2=quantize(phasemod_l2,quantize_amount_phasemod_l2, quantize_mix_phasemod_l2);
+            phasemod_l2=quantize(phasemod_l2,d_quantize_amount_phasemod_l2, d_quantize_mix_phasemod_l2);
            
             //rights
-            float phasemod_r1=osc(phasemod_phase_r1+PI/2.0f,phasemod_osc_r1_amp,phasemod_osc_r1_shape);
+            float phasemod_r1=osc(phasemod_phase_r1+PI/2.0f,d_phasemod_osc_r1_amp,phasemod_osc_r1_shape);
             
-            phasemod_r1=quantize(phasemod_r1,quantize_amount_phasemod_r1, quantize_mix_phasemod_r1);
+            phasemod_r1=quantize(phasemod_r1,d_quantize_amount_phasemod_r1, d_quantize_mix_phasemod_r1);
             
-            float phasemod_r2=osc(phasemod_phase_r2+PI/2.0f,phasemod_osc_r2_amp,phasemod_osc_r2_shape);
+            float phasemod_r2=osc(phasemod_phase_r2+PI/2.0f,d_phasemod_osc_r2_amp,phasemod_osc_r2_shape);
             
-            phasemod_r2=quantize(phasemod_r2,quantize_amount_phasemod_r2, quantize_mix_phasemod_r2);
+            phasemod_r2=quantize(phasemod_r2,d_quantize_amount_phasemod_r2, d_quantize_mix_phasemod_r2);
             
             
             //audio samples
             
-            sample_l1=osc(phase_l1+phasemod_l1,osc_l1_amp+ampmod_l1,osc_l1_shape);
-            sample_l2=osc(phase_l2+phasemod_l2,osc_l2_amp+ampmod_l2,osc_l2_shape);
-            sample_r1=osc(phase_r1+PI/2.0f+phasemod_r1,osc_r1_amp+ampmod_r1,osc_r1_shape);
-            sample_r2=osc(phase_r2+PI/2.0f+phasemod_r2,osc_r2_amp+ampmod_r2,osc_r2_shape);
+            sample_l1=osc(phase_l1+phasemod_l1,d_osc_l1_amp+ampmod_l1,osc_l1_shape);
+            sample_l2=osc(phase_l2+phasemod_l2,d_osc_l2_amp+ampmod_l2,osc_l2_shape);
+            sample_r1=osc(phase_r1+PI/2.0f+phasemod_r1,d_osc_r1_amp+ampmod_r1,osc_r1_shape);
+            sample_r2=osc(phase_r2+PI/2.0f+phasemod_r2,d_osc_r2_amp+ampmod_r2,osc_r2_shape);
             
             
-            sample_l1=quantize(sample_l1,quantize_amount_l1, quantize_mix_l1);
-            sample_l2=quantize(sample_l2,quantize_amount_l2, quantize_mix_l2);
-            sample_r1=quantize(sample_r1,quantize_amount_r1, quantize_mix_r1);
-            sample_r2=quantize(sample_r2,quantize_amount_r2, quantize_mix_r2);
+            sample_l1=quantize(sample_l1,d_quantize_amount_l1, d_quantize_mix_l1);
+            sample_l2=quantize(sample_l2,d_quantize_amount_l2, d_quantize_mix_l2);
+            sample_r1=quantize(sample_r1,d_quantize_amount_r1, d_quantize_mix_r1);
+            sample_r2=quantize(sample_r2,d_quantize_amount_r2, d_quantize_mix_r2);
             
             
             
@@ -940,6 +1079,9 @@ void ofApp::keyPressed(int key) {
    
     //if(key=='q'){sw1==0;}
     
+    if(key=='a'){osc_lag+=0.01; cout<<osc_lag<<endl;}
+    if(key=='z'){osc_lag-=0.01; cout<<osc_lag<<endl;}
+    
     if(key=='s'){sx+=0.01;}
     if(key=='x'){sx-=0.01;}
     
@@ -1040,6 +1182,54 @@ void ofApp::midibiz(){
                 
                
                 //distortion switches
+                
+                if(message.control==59){
+                    if(message.value==127){
+                        p_lock_switch=1;
+                        //cout<<"ON"<<endl;
+                        // p_lock_increment=0;
+                        
+                        if(message.value==127){
+							for(int i=0;i<p_lock_number;i++){
+								p_lock_smoothed[i]=0;
+								for(int j=0;j<p_lock_size;j++){
+                                
+									p_lock[i][j]=p_lock[i][p_lock_increment];
+                                
+								}//endplocksize
+                            
+							}//endplocknumber
+						}
+                        
+                    }
+                    
+                    if(message.value==0){
+                        p_lock_switch=0;
+                    }
+                    
+                }
+                
+                if(message.control==58){
+						
+					if(message.value==127){
+                        for(int i=0;i<p_lock_number;i++){
+                            p_lock_smoothed[i]=0;
+                            for(int j=0;j<p_lock_size;j++){
+                                
+                                p_lock[i][j]=0;
+                                
+                            }//endplocksize
+                            
+                        }//endplocknumber
+                    }
+                    
+                    for(int i=0;i<p_lock_size;i++){
+						p_lock[0][i]=.5;
+						p_lock[1][i]=.5;
+					}
+                    //add the initialize values as well
+                }
+                
                 
                 if(message.control==60){
                     if(message.value==127) {overflow_switch=1;}
@@ -1516,10 +1706,12 @@ void ofApp::midibiz(){
                     
                     if(osc_l_switch==0){
                         osc_l1_amp=2*message.value/127.0f;
+                        p_lock[0][p_lock_increment]=message.value/127.0f;
                     }
                     
                     if(osc_l_switch==1){
                         osc_l2_amp=message.value/127.0f;
+                        p_lock[16][p_lock_increment]=message.value/127.0f;
                     }
                     
                 }
@@ -1531,10 +1723,12 @@ void ofApp::midibiz(){
                     
                     if(osc_r_switch==0){
                         osc_r1_amp=2*message.value/127.0f;
+                        p_lock[1][p_lock_increment]=message.value/127.0f;
                     }
                     
                     if(osc_r_switch==1){
                         osc_r2_amp=message.value/127.0f;
+                        p_lock[17][p_lock_increment]=message.value/127.0f;
                     }
                     
                 }
@@ -1545,10 +1739,12 @@ void ofApp::midibiz(){
                     //c3=(message.value)/127.0f;
                     if(ampmod_osc_l_switch==0){
                         ampmod_osc_l1_amp=message.value/127.0f;
+                        p_lock[2][p_lock_increment]=message.value/127.0f;
                     }
                     
                     if(ampmod_osc_l_switch==1){
                         ampmod_osc_l2_amp=message.value/127.0f;
+                        p_lock[18][p_lock_increment]=message.value/127.0f;
                     }
                 }
                 
@@ -1559,10 +1755,12 @@ void ofApp::midibiz(){
                     
                     if(ampmod_osc_r_switch==0){
                         ampmod_osc_r1_amp=message.value/127.0f;
+                        p_lock[3][p_lock_increment]=message.value/127.0f;
                     }
                     
                     if(ampmod_osc_r_switch==1){
                         ampmod_osc_r2_amp=message.value/127.0f;
+                        p_lock[19][p_lock_increment]=message.value/127.0f;
                     }
                     
                 }
@@ -1575,10 +1773,12 @@ void ofApp::midibiz(){
                     //  c5=(message.value)/127.0f;
                     if(phasemod_osc_l_switch==0){
                         phasemod_osc_l1_amp=pm_amp*message.value/127.0f;
+                        p_lock[4][p_lock_increment]=message.value/127.0f;
                     }
                     
                     if(phasemod_osc_l_switch==1){
                         phasemod_osc_l2_amp=pm_amp*message.value/127.0f;
+                        p_lock[20][p_lock_increment]=message.value/127.0f;
                     }
                     
                 }
@@ -1592,10 +1792,12 @@ void ofApp::midibiz(){
                     
                     if(phasemod_osc_r_switch==0){
                         phasemod_osc_r1_amp=pm_amp*message.value/127.0f;
+                        p_lock[5][p_lock_increment]=message.value/127.0f;
                     }
                     
                     if(phasemod_osc_r_switch==1){
                         phasemod_osc_r2_amp=pm_amp*message.value/127.0f;
+                        p_lock[21][p_lock_increment]=message.value/127.0f;
                     }
                 }
                 
@@ -1607,25 +1809,31 @@ void ofApp::midibiz(){
                      if(quantize_osc_l_switch==0){
                          if(quantize_mod_l_switch==0){
                              quantize_mix_l1=(message.value)/127.0f;
+                             p_lock[6][p_lock_increment]=message.value/127.0f;
                          }
                          if(quantize_mod_l_switch==1){
                              quantize_mix_ampmod_l1=(message.value)/127.0f;
+                             p_lock[22][p_lock_increment]=message.value/127.0f;
                          }
                          
                          if(quantize_mod_l_switch==2){
                              quantize_mix_phasemod_l1=(message.value)/127.0f;
+                             p_lock[32][p_lock_increment]=message.value/127.0f;
                          }
                      }
                     if(quantize_osc_l_switch==1){
                         if(quantize_mod_l_switch==0){
                             quantize_mix_l2=(message.value)/127.0f;
+                            p_lock[36][p_lock_increment]=message.value/127.0f;
                         }
                         if(quantize_mod_l_switch==1){
                             quantize_mix_ampmod_l2=(message.value)/127.0f;
+                            p_lock[40][p_lock_increment]=message.value/127.0f;
                         }
                         
                         if(quantize_mod_l_switch==2){
                             quantize_mix_phasemod_l2=(message.value)/127.0f;
+                            p_lock[44][p_lock_increment]=message.value/127.0f;
                         }
                     }
                     
@@ -1640,25 +1848,31 @@ void ofApp::midibiz(){
                     if(quantize_osc_r_switch==0){
                         if(quantize_mod_r_switch==0){
                             quantize_mix_r1=(message.value)/127.0f;
+                            p_lock[7][p_lock_increment]=message.value/127.0f;
                         }
                         if(quantize_mod_r_switch==1){
                             quantize_mix_ampmod_r1=(message.value)/127.0f;
+                            p_lock[23][p_lock_increment]=message.value/127.0f;
                         }
                         
                         if(quantize_mod_r_switch==2){
                             quantize_mix_phasemod_r1=(message.value)/127.0f;
+                            p_lock[33][p_lock_increment]=message.value/127.0f;
                         }
                     }
                     if(quantize_osc_r_switch==1){
                         if(quantize_mod_r_switch==0){
                             quantize_mix_r2=(message.value)/127.0f;
+                            p_lock[37][p_lock_increment]=message.value/127.0f;
                         }
                         if(quantize_mod_r_switch==1){
                             quantize_mix_ampmod_r2=(message.value)/127.0f;
+                            p_lock[41][p_lock_increment]=message.value/127.0f;
                         }
                         
                         if(quantize_mod_r_switch==2){
                             quantize_mix_phasemod_r2=(message.value)/127.0f;
+                            p_lock[45][p_lock_increment]=message.value/127.0f;
                         }
                     }
 
@@ -1672,10 +1886,13 @@ void ofApp::midibiz(){
                     
                     if(osc_l_switch==0){
                         osc_l1_midi=(message.value-63.0)/63.0;
+                        p_lock[8][p_lock_increment]=(message.value-63.0)/63.0;
                     }
                     
                     if(osc_l_switch==1){
                         osc_l2_midi=(message.value-63.0)/63.0;
+                        p_lock[24][p_lock_increment]=(message.value-63.0)/63.0;
+                        
                     }
                     
                 }
@@ -1686,10 +1903,12 @@ void ofApp::midibiz(){
                     
                     if(osc_r_switch==0){
                         osc_r1_midi=(message.value-63.0)/63.0;
+                        p_lock[9][p_lock_increment]=(message.value-63.0)/63.0;
                     }
                     
                     if(osc_r_switch==1){
                         osc_r2_midi=(message.value-63.0)/63.0;
+                        p_lock[25][p_lock_increment]=(message.value-63.0)/63.0;
                     }
                     
                 }
@@ -1700,10 +1919,12 @@ void ofApp::midibiz(){
                     
                     if(ampmod_osc_l_switch==0){
                         ampmod_osc_l1_midi=(message.value-63.0)/63.0;
+                        p_lock[10][p_lock_increment]=(message.value-63.0)/63.0;
                     }
                     
                     if(ampmod_osc_l_switch==1){
                         ampmod_osc_l2_midi=(message.value-63.0)/63.0;
+                        p_lock[26][p_lock_increment]=(message.value-63.0)/63.0;
                     }
                 }
                 
@@ -1714,11 +1935,13 @@ void ofApp::midibiz(){
                     
                     if(ampmod_osc_r_switch==0){
                         ampmod_osc_r1_midi=(message.value-63.0)/63.0;
+                        p_lock[11][p_lock_increment]=(message.value-63.0)/63.0;
                         
                     }
                     
                     if(ampmod_osc_r_switch==1){
                         ampmod_osc_r2_midi=(message.value-63.0)/63.0;
+                        p_lock[27][p_lock_increment]=(message.value-63.0)/63.0;
                     }
                 }
                 
@@ -1728,31 +1951,29 @@ void ofApp::midibiz(){
                     
                     if(phasemod_osc_l_switch==0){
                         phasemod_osc_l1_midi=(message.value-63.0)/63.0;
+                        p_lock[12][p_lock_increment]=(message.value-63.0)/63.0;
                         
-                        //phasemod_osc_l1_midi=(message.value)/127.0f-1.0f;
 
                     }
                     
                     if(phasemod_osc_l_switch==1){
                         
                         phasemod_osc_l2_midi=(message.value-63.0)/63.0;
-                        //phasemod_osc_l2_midi=(message.value)/127.0f-1.0f;
+                        p_lock[28][p_lock_increment]=(message.value-63.0)/63.0;
                     }
                     
                 }
                 
                 if(message.control==125){
-                    //c14=(message.value-63.0)/63.0;
-                    //c14=(message.value)/127.0f;
                     
                     if(phasemod_osc_r_switch==0){
                         phasemod_osc_r1_midi=(message.value-63.0)/63.0;
-                        //phasemod_osc_r1_midi=(message.value)/127.0-1.0f;
+                        p_lock[13][p_lock_increment]=(message.value-63.0)/63.0;
                     }
                     
                     if(phasemod_osc_r_switch==1){
                         phasemod_osc_r2_midi=(message.value-63.0)/63.0;
-                        //phasemod_osc_r2_midi=(message.value)/127.0-1.0f;
+                        p_lock[29][p_lock_increment]=(message.value-63.0)/63.0;
                     }
                 }
                 
@@ -1764,23 +1985,33 @@ void ofApp::midibiz(){
                     if(quantize_osc_l_switch==0){
                         
                         if(quantize_mod_l_switch==0){
-                            quantize_amount_l1=24.0f*(message.value)/127.0f+1.0f;
+                            //quantize_amount_l1=24.0f*(message.value)/127.0f+1.0f;
+                            p_lock[14][p_lock_increment]=(message.value)/127.0f;
                         }
                         if(quantize_mod_l_switch==1){
                             quantize_amount_ampmod_l1=24.0f*(message.value)/127.0f+1.0f;
+                            p_lock[30][p_lock_increment]=(message.value)/127.0f;
                         }
                         
                         if(quantize_mod_l_switch==2){
                             quantize_amount_phasemod_l1=24.0f*(message.value)/127.0f+1.0f;
+                            p_lock[34][p_lock_increment]=(message.value)/127.0f;
                         }
                     }
                 
                     if(quantize_osc_l_switch==1){
                         if(quantize_mod_l_switch==0){
                             quantize_amount_l2=24.0f*(message.value)/127.0f+1.0f;
+                            p_lock[38][p_lock_increment]=(message.value)/127.0f;
                         }
                         if(quantize_mod_l_switch==1){
                             quantize_amount_ampmod_l2=24.0f*(message.value)/127.0f+1.0f;
+                            p_lock[42][p_lock_increment]=(message.value)/127.0f;
+                        }
+                        
+                        if(quantize_mod_l_switch==2){
+                            quantize_amount_phasemod_l2=24.0f*(message.value)/127.0f+1.0f;
+                            p_lock[46][p_lock_increment]=(message.value)/127.0f;
                         }
                     }
                     
@@ -1794,22 +2025,32 @@ void ofApp::midibiz(){
                         
                         if(quantize_mod_r_switch==0){
                             quantize_amount_r1=24.0f*(message.value)/127.0f+1.0f;
+                            p_lock[15][p_lock_increment]=(message.value)/127.0f;
+                            
                         }
                         if(quantize_mod_r_switch==1){
                             quantize_amount_ampmod_r1=24.0f*(message.value)/127.0f+1.0f;
+                            p_lock[31][p_lock_increment]=(message.value)/127.0f;
                         }
                         
                         if(quantize_mod_r_switch==2){
                             quantize_amount_phasemod_r1=24.0f*(message.value)/127.0f+1.0f;
+                            p_lock[35][p_lock_increment]=(message.value)/127.0f;
                         }
                     }
                     
                     if(quantize_osc_r_switch==1){
                         if(quantize_mod_r_switch==0){
                             quantize_amount_r2=24.0f*(message.value)/127.0f+1.0f;
+                            p_lock[39][p_lock_increment]=(message.value)/127.0f;
                         }
                         if(quantize_mod_r_switch==1){
                             quantize_amount_ampmod_r2=24.0f*(message.value)/127.0f+1.0f;
+                            p_lock[43][p_lock_increment]=(message.value)/127.0f;
+                        }
+                        if(quantize_mod_l_switch==2){
+                            quantize_amount_phasemod_l2=24.0f*(message.value)/127.0f+1.0f;
+                            p_lock[47][p_lock_increment]=(message.value)/127.0f;
                         }
                     }
 
